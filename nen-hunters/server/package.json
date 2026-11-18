@@ -1,0 +1,12 @@
+{
+  "name": "nen-hunters-server",
+  "version": "0.1.0",
+  "description": "Servidor autoritativo do RPG online Nen Hunters (mundo aberto, combate em tempo real, spin de Nen)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

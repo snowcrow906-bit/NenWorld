@@ -30,6 +30,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 #cat{position:fixed;right:max(10px,env(safe-area-inset-right));top:calc(max(10px,env(safe-area-inset-top)) + 46px);font-size:12px;color:var(--suave);text-align:right;pointer-events:none}
 #cat b{font-family:var(--serif);font-weight:normal;font-size:14px}
 
+#mm{position:fixed;left:auto;bottom:auto;right:max(10px,env(safe-area-inset-right));top:calc(max(10px,env(safe-area-inset-top)) + 92px);width:110px;height:110px;border-radius:8px;border:1px solid var(--linha);background:rgba(11,18,32,.6);pointer-events:none}
+#quest{margin-top:7px;padding-top:6px;border-top:1px solid var(--linha);font-size:12px;color:var(--suave)}
+#quest b{color:var(--tinta);font-weight:normal}
 #toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);background:var(--painel);border:1px solid var(--linha);padding:8px 14px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
 #toast.on{opacity:1}
 #dead{position:fixed;inset:0;display:grid;place-items:center;background:rgba(40,0,0,.45);font-family:var(--serif);font-size:22px;pointer-events:none}
@@ -97,10 +100,13 @@ body.touch #bChat{display:block!important}
   <div class="bar" id="bHp"><i></i></div>
   <div class="bar" id="bAu"><i></i></div>
   <div class="bar" id="bXp"><i></i></div>
+  <div id="quest"></div>
 </div>
+<canvas id="mm" width="110" height="110" class="hidden"></canvas>
 <div id="econ" class="hidden">
   <button id="bJenny" class="j" aria-label="Jenny">0 J</button>
   <button id="bSpinOpen" aria-label="Abrir spin e juramento">Spins 0</button>
+  <button id="bHome" aria-label="Voltar à vila">Vila</button>
   <button id="bChat" class="hidden" aria-label="Chat">Chat</button>
 </div>
 <div id="cat" class="hidden"></div>
@@ -118,7 +124,7 @@ body.touch #bChat{display:block!important}
   <button id="bHatsu">Hatsu<small id="hCd"></small></button>
   <button id="bNen">Ten</button>
 </div>
-<div id="keys">WASD mover · clique ou Espaço atacar · E Hatsu · 1 Ten 2 Zetsu 3 Ren · R Spin · Enter chat</div>
+<div id="keys">WASD mover · clique ou Espaço atacar · E Hatsu · 1 Ten 2 Zetsu 3 Ren · R Spin · V Vila · Enter chat</div>
 
 <div id="scrim" class="hidden"><div id="panel"></div></div>
 
@@ -175,7 +181,7 @@ function connect(name) {
   ws.onopen = () => send({ t: 'join', name, token: token() });
   ws.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
-    if (m.t === 'welcome') { G = m; $('#join').classList.add('hidden'); for (const s of ['#hud', '#econ', '#cat', '#chat']) $(s).classList.remove('hidden'); $('#chatin').classList.add('hidden'); if (!IS_TOUCH) $('#chatin').classList.remove('hidden'); }
+    if (m.t === 'welcome') { G = m; $('#join').classList.add('hidden'); for (const s of ['#hud', '#econ', '#cat', '#chat', '#mm']) $(s).classList.remove('hidden'); $('#chatin').classList.add('hidden'); if (!IS_TOUCH) $('#chatin').classList.remove('hidden'); }
     else if (m.t === 's') onState(m);
     else if (m.t === 'toast') toast(m.msg);
     else if (m.t === 'chat') chatLine(m.n, m.text);
@@ -184,7 +190,7 @@ function connect(name) {
   ws.onclose = (e) => {
     G = null; me = null; players.clear(); mobs.clear(); camInit = false;
     closePanel();
-    for (const s of ['#hud', '#econ', '#cat', '#chat', '#dead']) $(s).classList.add('hidden');
+    for (const s of ['#hud', '#econ', '#cat', '#chat', '#mm', '#dead']) $(s).classList.add('hidden');
     $('#join').classList.remove('hidden');
     $('#joinErr').textContent = e.reason ? 'Desconectado: ' + e.reason : 'Sem conexão com o servidor. Verifique o endereço e tente de novo.';
   };
@@ -241,6 +247,8 @@ function hud() {
   $('#cat').innerHTML = c ? '<b style="color:' + c.cor + '">' + c.nome + '</b><br>Hatsu: ' + c.hatsu : '<b>Sem categoria</b><br>Abra Spins e gire';
   $('#bNen').textContent = NEN_NAME[me.nen];
   $('#hCd').textContent = me.hcd > 0 ? me.hcd.toFixed(0) + 's' : '';
+  $('#quest').innerHTML = me.q ? 'Caçada: <b>' + G.mobs[me.q.ty].nome + ' ' + me.q.have + '/' + me.q.need + '</b> · +' + me.q.rj + ' J' : '';
+  $('#bHome').textContent = me.hm > 0 ? 'Vila ' + me.hm + 's' : 'Vila';
   $('#dead').classList.toggle('hidden', !me.dead);
   if (!$('#scrim').classList.contains('hidden')) panelLive();
 }
@@ -255,6 +263,7 @@ addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 'enter') { e.preventDefault(); $('#chatin').focus(); return; }
   if (k === 'r') return togglePanel();
+  if (k === 'v') return send({ t: 'home' });
   if (k === 'escape') return closePanel();
   if (!$('#scrim').classList.contains('hidden')) return;
   if (k === 'e') send({ t: 'hatsu', ...aim() });
@@ -288,6 +297,7 @@ $('#bHatsu').addEventListener('click', () => send({ t: 'hatsu', ...aim() }));
 $('#bNen').addEventListener('click', () => { if (me) send({ t: 'nen', mode: NEN_ORDER[(NEN_ORDER.indexOf(me.nen) + 1) % 3] }); });
 $('#bSpinOpen').onclick = () => togglePanel();
 $('#bJenny').onclick = () => togglePanel();
+$('#bHome').onclick = () => send({ t: 'home' });
 $('#bChat').onclick = () => { const v = prompt('Mensagem para todos:'); if (v && v.trim()) send({ t: 'chat', text: v.trim() }); };
 
 function aim() {
@@ -300,14 +310,18 @@ function aim() {
   for (const m of mobs.values()) { const d = Math.hypot(m.x - sx, m.y - sy); if (d < bd) { bd = d; best = m; } }
   return best ? { ax: best.x - sx, ay: best.y - sy } : {};
 }
-let lastIn = '', lastInT = 0;
-setInterval(() => {
-  if (!G || !me) return;
+function inputVec() {
   let dx = stick.x, dy = stick.y;
   if (!dx && !dy) {
     if (keys.has('a') || keys.has('arrowleft')) dx -= 1; if (keys.has('d') || keys.has('arrowright')) dx += 1;
     if (keys.has('w') || keys.has('arrowup')) dy -= 1; if (keys.has('s') || keys.has('arrowdown')) dy += 1;
   }
+  return { dx, dy };
+}
+let lastIn = '', lastInT = 0;
+setInterval(() => {
+  if (!G || !me) return;
+  const { dx, dy } = inputVec();
   const s = dx.toFixed(2) + ',' + dy.toFixed(2), t = performance.now();
   if (s !== lastIn || t - lastInT > 300) { lastIn = s; lastInT = t; send({ t: 'input', dx, dy }); }
 }, 50);
@@ -323,7 +337,7 @@ function drawPanel() {
   const p = $('#panel'), c = me.cat ? G.cats[me.cat] : null;
   let h = '<button class="close" id="pX" aria-label="Fechar">×</button><h2>Licença de caçador</h2>' +
     '<div class="sub">Sua categoria de Nen e seus juramentos.</div>' +
-    '<div class="tabs"><button data-t="spin" class="' + (tab === 'spin' ? 'on' : '') + '">Spin</button><button data-t="vow" class="' + (tab === 'vow' ? 'on' : '') + '">Juramento</button></div>';
+    '<div class="tabs"><button data-t="spin" class="' + (tab === 'spin' ? 'on' : '') + '">Spin</button><button data-t="vow" class="' + (tab === 'vow' ? 'on' : '') + '">Juramento</button><button data-t="shop" class="' + (tab === 'shop' ? 'on' : '') + '">Loja</button></div>';
   if (tab === 'spin') {
     h += '<div class="sub" id="pCur">' + (c ? 'Categoria atual: <b>' + c.nome + '</b>. ' + c.desc : 'Você ainda não despertou sua categoria.') + '</div>' +
       '<div class="slot" id="pSlot">' + (c ? c.nome : '?') + '</div>' +
@@ -331,6 +345,9 @@ function drawPanel() {
       '<div class="sub" style="margin-top:8px">Girar substitui a categoria atual. Spins extras custam mais a cada compra.</div><ul class="odds">';
     for (const [id, pct] of G.odds) h += '<li><span><i style="background:' + G.cats[id].cor + '"></i>' + G.cats[id].nome + '</span><span>' + pct + '%</span></li>';
     h += '</ul>';
+  } else if (tab === 'shop') {
+    h += '<div class="sub" id="pShopNote" style="margin-bottom:8px"></div>';
+    for (const sl of ['wp', 'ar']) h += '<div class="vow" style="cursor:default"><b id="pg' + sl + 'N"></b><br><span class="sub" id="pg' + sl + 'D"></span><div class="row" style="margin-top:6px"><button class="act" id="pg' + sl + 'B" data-g="' + sl + '"></button></div></div>';
   } else {
     h += '<div class="sub" style="margin-bottom:8px">Um juramento deixa o Hatsu mais forte em troca de uma condição.</div>';
     for (const [id, v] of Object.entries(G.vows)) h += '<button class="vow ' + (me.vow === id ? 'on' : '') + '" data-v="' + id + '"><b>' + v.nome + '</b><br><span class="sub">' + v.desc + '</span></button>';
@@ -339,6 +356,8 @@ function drawPanel() {
   p.querySelector('#pX').onclick = closePanel;
   p.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; drawPanel(); }));
   p.querySelectorAll('[data-v]').forEach((b) => (b.onclick = () => { send({ t: 'vow', id: b.dataset.v }); me.vow = b.dataset.v; drawPanel(); }));
+  p.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => send({ t: 'buyGear', slot: b.dataset.g })));
+  if (tab === 'shop') panelLive();
   if (tab === 'spin') {
     p.querySelector('#pSpin').onclick = () => {
       if (spinning || me.spins <= 0) return;
@@ -350,6 +369,16 @@ function drawPanel() {
   }
 }
 function panelLive() {
+  if (tab === 'shop') {
+    $('#pShopNote').textContent = me.safe ? 'Bem-vindo à loja da vila.' : 'A loja só funciona na vila (centro do mapa). Use o botão Vila ou a tecla V.';
+    ['wp', 'ar'].forEach((sl, i) => {
+      const g = G.gear[sl], lv = me[sl], price = me.gp[i];
+      $('#pg' + sl + 'N').textContent = g.nome + ': ' + g.names[lv] + ' (nv ' + lv + '/' + g.max + ')';
+      $('#pg' + sl + 'D').textContent = g.bonus + (price ? ' · próximo: ' + g.names[lv + 1] : ' · nível máximo');
+      const b = $('#pg' + sl + 'B'); b.textContent = price ? 'Comprar: ' + price.toLocaleString('pt-BR') + ' J' : 'Máximo'; b.disabled = !price || me.jenny < price || !me.safe;
+    });
+    return;
+  }
   if (tab !== 'spin') return;
   const s = $('#pSpin'), b = $('#pBuy'); if (!s || !b) return;
   s.textContent = 'Girar (' + me.spins + ')'; s.disabled = spinning || me.spins <= 0;
@@ -407,11 +436,29 @@ function drawPlayer(o, self, t) {
   ctx.fillText((o.n || 'Você') + ' Nv' + (o.l || me.lvl), o.x, o.y - 32);
   bar(o.x, o.y - 27, 34, o.hp / o.mh, '#e5484d');
 }
+let lastFrame = 0;
+const mm = $('#mm').getContext('2d');
+function drawMini() {
+  const S = 110, k = S / G.world.w;
+  mm.clearRect(0, 0, S, S);
+  for (let i = 3; i >= 0; i--) { mm.fillStyle = G.zones[i].cor; mm.beginPath(); if (i === 3) mm.rect(0, 0, S, S); else mm.arc(G.world.cx * k, G.world.cy * k, G.zones[i].r * k, 0, 7); mm.fill(); }
+  for (const m of mobs.values()) { const d = G.mobs[m.ty]; mm.fillStyle = d.boss ? '#ff5a3c' : '#9aa4b2'; mm.fillRect(m.x * k - 1, m.y * k - 1, d.boss ? 4 : 2, d.boss ? 4 : 2); }
+  mm.fillStyle = '#7fe6ff'; for (const o of players.values()) mm.fillRect(o.x * k - 1.5, o.y * k - 1.5, 3, 3);
+  mm.fillStyle = '#fff'; mm.beginPath(); mm.arc(sx * k, sy * k, 3, 0, 7); mm.fill();
+}
 function frame(now) {
   requestAnimationFrame(frame);
   ctx.clearRect(0, 0, W, H);
   if (!G || !me) return;
-  sx += (me.x - sx) * 0.35; sy += (me.y - sy) * 0.35;
+  const dt = Math.min(0.05, (now - lastFrame) / 1000 || 0.016); lastFrame = now;
+  // predição: o próprio personagem anda na hora e é corrigido aos poucos pela posição do servidor
+  if (me.dead) { sx = me.x; sy = me.y; }
+  else {
+    let { dx, dy } = inputVec(); const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }
+    sx = Math.max(20, Math.min(G.world.w - 20, sx + dx * me.sp * dt)); sy = Math.max(20, Math.min(G.world.h - 20, sy + dy * me.sp * dt));
+    if (Math.hypot(me.x - sx, me.y - sy) > 150) { sx = me.x; sy = me.y; }
+    else { const c = Math.min(1, dt * 6); sx += (me.x - sx) * c; sy += (me.y - sy) * c; }
+  }
   for (const m of [players, mobs]) for (const o of m.values()) { o.x += (o.gx - o.x) * 0.35; o.y += (o.gy - o.y) * 0.35; }
   const hw = W / 2 / ZOOM, hh = H / 2 / ZOOM;
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(ZOOM, ZOOM); ctx.translate(-sx, -sy);
@@ -422,7 +469,8 @@ function frame(now) {
     const d = G.mobs[m.ty]; ctx.fillStyle = d.cor; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(m.x, m.y, d.r, 0, 7); ctx.fill(); ctx.stroke();
     if (m.st) { ctx.strokeStyle = '#f2c14e'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(m.x, m.y, d.r + 5, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
-    if (m.hp < m.mh) bar(m.x, m.y - d.r - 9, 30, m.hp / m.mh, '#e5484d');
+    if (d.boss) { ctx.fillStyle = '#ffb4a0'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center'; ctx.fillText(d.nome, m.x, m.y - d.r - 18); }
+    if (m.hp < m.mh) bar(m.x, m.y - d.r - 9, d.boss ? 70 : 30, m.hp / m.mh, '#e5484d');
   }
   for (const o of players.values()) drawPlayer(o, false, now);
   drawPlayer({ x: sx, y: sy, c: me.cat, nen: me.nen, d: me.dead, sh: me.sh, hp: me.hp, mh: me.mh, n: 'Você', l: me.lvl }, true, now);
@@ -431,6 +479,7 @@ function frame(now) {
   ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center';
   for (const t of texts) { const a = (now - t.t0) / 900; ctx.globalAlpha = 1 - a; ctx.fillStyle = t.c; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3; const y = t.y - a * 36; ctx.strokeText(t.v, t.x, y); ctx.fillText(t.v, t.x, y); ctx.globalAlpha = 1; }
   ctx.restore();
+  drawMini();
 }
 requestAnimationFrame(frame);
 })();

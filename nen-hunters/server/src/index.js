@@ -6,7 +6,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { Game, TICK } = require('./game');
 const { Store } = require('./store');
-const { WORLD, ZONES, CATS, SPIN_ODDS, VOWS, MOBS } = require('./data');
+const { WORLD, ZONES, CATS, SPIN_ODDS, VOWS, MOBS, GEAR } = require('./data');
 
 const PORT = process.env.PORT || 3000;
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -35,9 +35,26 @@ const wss = new WebSocketServer({
 const byToken = new Map();
 
 wss.on('connection', (ws) => {
-  let p = null;
+  let p = null, joining = false;
   let tokens = 80; // limite de mensagens: balde de 80, recarrega 40/s
   const refill = setInterval(() => { tokens = Math.min(80, tokens + 40); }, 1000);
+
+  async function join(m) {
+    const token = typeof m.token === 'string' ? m.token : '';
+    if (token.length < 16 || token.length > 64) return ws.close(4000, 'token inválido');
+    if (game.players.size >= MAX_PLAYERS) return ws.close(4001, 'servidor cheio');
+    await store.ensure(token);
+    if (ws.readyState !== 1) return;
+    const old = byToken.get(token);
+    if (old) { try { old.ws.close(4002, 'login em outro lugar'); } catch (_) {} game.removePlayer(old); }
+    const name = String(m.name || '').replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 14) || 'Caçador';
+    p = game.addPlayer(ws, token, name);
+    byToken.set(token, p);
+    game.send(p, {
+      t: 'welcome', id: p.id, world: WORLD, zones: ZONES,
+      cats: CATS, odds: SPIN_ODDS, vows: VOWS, mobs: MOBS, gear: GEAR,
+    });
+  }
 
   ws.on('message', (raw) => {
     if (--tokens < 0) return;
@@ -45,19 +62,9 @@ wss.on('connection', (ws) => {
     try { m = JSON.parse(raw); } catch (_) { return; }
     if (!m || typeof m.t !== 'string') return;
     if (!p) {
-      if (m.t !== 'join') return;
-      const token = typeof m.token === 'string' ? m.token : '';
-      if (token.length < 16 || token.length > 64) return ws.close(4000, 'token inválido');
-      if (game.players.size >= MAX_PLAYERS) return ws.close(4001, 'servidor cheio');
-      const old = byToken.get(token);
-      if (old) { try { old.ws.close(4002, 'login em outro lugar'); } catch (_) {} game.removePlayer(old); }
-      const name = String(m.name || '').replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 14) || 'Caçador';
-      p = game.addPlayer(ws, token, name);
-      byToken.set(token, p);
-      game.send(p, {
-        t: 'welcome', id: p.id, world: WORLD, zones: ZONES,
-        cats: CATS, odds: SPIN_ODDS, vows: VOWS, mobs: MOBS,
-      });
+      if (m.t !== 'join' || joining) return;
+      joining = true;
+      join(m).catch((e) => { console.error('join falhou:', e.message); try { ws.close(4003, 'Banco de dados indisponível. Tente de novo em instantes.'); } catch (_) {} });
       return;
     }
     game.handle(p, m);
@@ -71,9 +78,9 @@ wss.on('connection', (ws) => {
 });
 
 setInterval(() => game.tick(), 1000 / TICK);
-setInterval(() => game.saveAll(), 20000);
-function bye() { game.saveAll(); process.exit(0); }
+setInterval(() => { game.saveAll().catch(() => {}); }, 20000);
+async function bye() { try { await game.saveAll(); } catch (_) {} process.exit(0); }
 process.on('SIGINT', bye);
 process.on('SIGTERM', bye);
 
-server.listen(PORT, () => console.log('Nen Hunters rodando em http://localhost:' + PORT));
+server.listen(PORT, () => console.log('Nen Hunters rodando em http://localhost:' + PORT + ' (save: ' + store.mode + ')'));

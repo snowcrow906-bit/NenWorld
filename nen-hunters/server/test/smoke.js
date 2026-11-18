@@ -47,6 +47,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ws.send(JSON.stringify({ t: 'buySpin' })); await wait(150);
   if (!toasts.some((t) => t.includes('insuficiente'))) fail('compra sem Jenny deveria falhar'); ok('compra sem Jenny bloqueada');
 
+  if (!last.me.q || !welcome.mobs[last.me.q.ty]) fail('sem missão inicial'); ok('missão inicial: ' + last.me.q.ty + ' x' + last.me.q.need);
+  if (typeof last.me.sp !== 'number') fail('sem velocidade para predição'); ok('velocidade enviada para predição do cliente');
+  ws.send(JSON.stringify({ t: 'buyGear', slot: 'wp' })); await wait(150);
+  if (!toasts.some((t) => t.includes('insuficiente')) || last.me.wp !== 0) fail('compra de arma sem Jenny deveria falhar'); ok('loja bloqueia compra sem Jenny');
+  ws.send(JSON.stringify({ t: 'home' })); await wait(150);
+  if (last.me.hm < 20) fail('voltar à vila deveria ter recarga'); ok('voltar à vila com recarga de 30s');
   ws.send(JSON.stringify({ t: 'attack', ax: 1, ay: 0 })); await wait(100);
   ws.send(JSON.stringify({ t: 'nen', mode: 'ren' })); await wait(150);
   if (last.me.nen !== 'ren') fail('Ren não ativou'); ok('Ren ativado');

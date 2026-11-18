@@ -44,9 +44,19 @@ const VOWS = {
 };
 
 const MOBS = {
-  lobo: { nome: 'Lobo Sombrio', hp: 40, dano: 6, vel: 115, xp: 12, jenny: [6, 14], r: 14, aggro: 230, ring: [380, 980], count: 16, cor: '#7d8798' },
-  urso: { nome: 'Urso Rochoso', hp: 130, dano: 15, vel: 90, xp: 42, jenny: [22, 42], r: 22, aggro: 210, ring: [1020, 1480], count: 11, cor: '#8a6a4a' },
-  golem: { nome: 'Golem das Ruínas', hp: 320, dano: 30, vel: 70, xp: 120, jenny: [65, 125], r: 30, aggro: 200, ring: [1520, 1700], count: 7, cor: '#a89f90' },
+  lobo: { nome: 'Lobo Sombrio', minLvl: 1, questNeed: 6, hp: 40, dano: 6, vel: 115, xp: 12, jenny: [6, 14], r: 14, aggro: 230, ring: [380, 980], count: 16, cor: '#7d8798' },
+  urso: { nome: 'Urso Rochoso', minLvl: 5, questNeed: 5, hp: 130, dano: 15, vel: 90, xp: 42, jenny: [22, 42], r: 22, aggro: 210, ring: [1020, 1480], count: 11, cor: '#8a6a4a' },
+  golem: { nome: 'Golem das Ruínas', minLvl: 12, questNeed: 4, hp: 320, dano: 30, vel: 70, xp: 120, jenny: [65, 125], r: 30, aggro: 200, ring: [1520, 1700], count: 7, cor: '#a89f90' },
+  guardiao: { nome: 'Guardião das Ruínas', boss: true, respawn: 90000, minLvl: 20, questNeed: 1, hp: 2200, dano: 45, vel: 85, xp: 700, jenny: [450, 900], r: 46, aggro: 300, ring: [1560, 1680], count: 1, cor: '#c9503a' },
 };
 
-module.exports = { WORLD, ZONES, zoneAt, CATS, CAT_IDS, SPIN_ODDS, SPIN_PRICE, VOWS, MOBS };
+// Equipamentos comprados na vila com Jenny (7 níveis: 0 a 6)
+const GEAR = {
+  wp: { nome: 'Arma', bonus: '+15% de dano por nível', max: 6, base: 250, mult: 2.1,
+    names: ['Punhos nus', 'Luvas de treino', 'Luvas reforçadas', 'Manoplas de aço', 'Manoplas de Nen', 'Manoplas lendárias', 'Manoplas do Mestre'] },
+  ar: { nome: 'Armadura', bonus: '-6% de dano recebido por nível', max: 6, base: 250, mult: 2.1,
+    names: ['Roupa simples', 'Roupa de viagem', 'Colete de couro', 'Cota de malha', 'Armadura leve', 'Armadura pesada', 'Armadura do Caçador'] },
+};
+const gearPrice = (slot, lvl) => (lvl >= GEAR[slot].max ? 0 : Math.round(GEAR[slot].base * Math.pow(GEAR[slot].mult, lvl)));
+
+module.exports = { WORLD, ZONES, zoneAt, CATS, CAT_IDS, SPIN_ODDS, SPIN_PRICE, VOWS, MOBS, GEAR, gearPrice };

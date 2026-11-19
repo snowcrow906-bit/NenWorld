@@ -1,0 +1,9 @@
+# Deploy em um único serviço no Render: o servidor também entrega o jogo (client/index.html).
+services:
+  - type: web
+    name: nen-hunters
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health

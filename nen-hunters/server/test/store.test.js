@@ -2,12 +2,13 @@
 // Testa o salvamento no Supabase contra um servidor falso que imita a API REST (PostgREST).
 const http = require('http');
 const rows = {};
-let down = false;
+let down = false, vistoBearer = false;
 const mock = http.createServer((req, res) => {
   let body = '';
   req.on('data', (d) => (body += d));
   req.on('end', () => {
-    if (req.headers.apikey !== 'chave-teste') { res.writeHead(401); return res.end('{}'); }
+    if (req.headers.authorization) vistoBearer = true;
+    if (req.headers.apikey !== 'sb_secret_teste') { res.writeHead(401); return res.end('{}'); }
     if (req.method === 'POST') {
       if (!req.url.includes('on_conflict=token_hash') || !String(req.headers.prefer).includes('merge-duplicates')) { res.writeHead(400); return res.end('{}'); }
       for (const r of JSON.parse(body)) rows[r.token_hash] = r.data;
@@ -21,7 +22,7 @@ const mock = http.createServer((req, res) => {
 });
 mock.listen(0, async () => {
   process.env.SUPABASE_URL = 'http://localhost:' + mock.address().port + '/';
-  process.env.SUPABASE_KEY = 'chave-teste';
+  process.env.SUPABASE_KEY = 'sb_secret_teste';
   const { Store } = require('../src/store');
   const fail = (m) => { console.error('FALHOU:', m); process.exit(1); };
   const a = new Store();
@@ -32,7 +33,8 @@ mock.listen(0, async () => {
   await b.ensure('token-de-teste-1234567890');
   const rec = b.get('token-de-teste-1234567890');
   if (!rec || rec.lvl !== 7 || rec.jenny !== 123) fail('registro não voltou do banco');
-  console.log('ok - save e carga via Supabase (servidor simulado)');
+  if (vistoBearer) fail('chave sb_secret_ não deve ir no cabeçalho Authorization');
+  console.log('ok - save e carga via Supabase (servidor simulado), chave nova só no apikey');
   const c = new Store(); await c.ensure('token-inexistente-0000000000');
   if (c.get('token-inexistente-0000000000') !== null) fail('jogador novo deveria vir vazio');
   console.log('ok - jogador novo começa vazio');

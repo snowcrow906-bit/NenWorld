@@ -1,7 +1,7 @@
 'use strict';
 // Mundo autoritativo: o servidor decide movimento, dano, drops e spins.
 const crypto = require('crypto');
-const { WORLD, zoneAt, CATS, CAT_IDS, SPIN_ODDS, SPIN_PRICE, VOWS, MOBS, GEAR, gearPrice } = require('./data');
+const { WORLD, zoneAt, CATS, CAT_IDS, SPIN_ODDS, SPIN_PRICE, VOWS, MOBS, GEAR, gearPrice, ITEMS, ITEM_MAX, EXAM } = require('./data');
 
 const TICK = 20, DT = 1 / TICK, VIEW = 900, LEVEL_CAP = 50;
 const HATSU_COST = 35, HATSU_CD = 6, ATK_CD = 0.5;
@@ -10,6 +10,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r1 = (v) => Math.round(v * 10) / 10;
+const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 class Game {
@@ -44,15 +45,20 @@ class Game {
       nen: 'ten', aura: 60, atkCd: 0, hatsuCd: 0, shield: 0, shieldUntil: 0, buffUntil: 0, buffPower: 1,
       dead: false, respawnAt: 0, lastChat: 0,
       wp: 0, ar: 0, quest: null, lastHurt: 0, homeCd: 0,
+      inv: { pocao: 0, cristal: 0 }, exam: { n: 1, have: 0 }, hunter: false, hname: '', lastItem: 0, lastRank: 0,
     };
     if (saved) {
       p.lvl = clamp(saved.lvl | 0 || 1, 1, LEVEL_CAP); p.xp = num(saved.xp);
-      p.cat = CATS[saved.cat] ? saved.cat : null; p.jenny = Math.max(0, num(saved.jenny) | 0);
+      p.cat = has(CATS, saved.cat) ? saved.cat : null; p.jenny = Math.max(0, num(saved.jenny) | 0);
       p.spins = Math.max(0, num(saved.spins) | 0); p.buys = Math.max(0, num(saved.buys) | 0);
-      p.vow = VOWS[saved.vow] ? saved.vow : 'nenhum'; p.history = Array.isArray(saved.history) ? saved.history.slice(0, 10) : [];
+      p.vow = has(VOWS, saved.vow) ? saved.vow : 'nenhum'; p.history = Array.isArray(saved.history) ? saved.history.slice(0, 10) : [];
       p.wp = clamp(saved.wp | 0, 0, GEAR.wp.max); p.ar = clamp(saved.ar | 0, 0, GEAR.ar.max);
+      for (const id of Object.keys(ITEMS)) p.inv[id] = clamp((saved.inv && saved.inv[id]) | 0, 0, ITEM_MAX);
+      p.hunter = !!saved.hunter; p.hname = typeof saved.hname === 'string' ? saved.hname.slice(0, 20) : '';
+      const ex = saved.exam;
+      p.exam = p.hunter ? null : (ex && EXAM[(ex.n | 0) - 1] ? { n: ex.n | 0, have: clamp(ex.have | 0, 0, EXAM[(ex.n | 0) - 1].need) } : { n: 1, have: 0 });
       const q = saved.quest;
-      if (q && MOBS[q.ty] && q.need > 0) p.quest = { ty: q.ty, need: q.need | 0, have: clamp(q.have | 0, 0, q.need | 0), rj: q.rj | 0, rx: q.rx | 0 };
+      if (q && has(MOBS, q.ty) && q.need > 0) p.quest = { ty: q.ty, need: q.need | 0, have: clamp(q.have | 0, 0, q.need | 0), rj: q.rj | 0, rx: q.rx | 0 };
     }
     if (!p.quest) p.quest = this.newQuest(p);
     p.hp = this.maxHp(p); p.aura = this.maxAura(p);
@@ -63,7 +69,7 @@ class Game {
   removePlayer(p) { this.save(p); this.players.delete(p.id); }
 
   save(p) {
-    this.store.set(p.token, { name: p.name, lvl: p.lvl, xp: Math.round(p.xp), cat: p.cat, jenny: p.jenny, spins: p.spins, buys: p.buys, vow: p.vow, history: p.history, wp: p.wp, ar: p.ar, quest: p.quest });
+    this.store.set(p.token, { name: p.name, lvl: p.lvl, xp: Math.round(p.xp), cat: p.cat, jenny: p.jenny, spins: p.spins, buys: p.buys, vow: p.vow, history: p.history, wp: p.wp, ar: p.ar, quest: p.quest, inv: p.inv, exam: p.exam, hunter: p.hunter, hname: p.hname });
   }
   saveAll() { for (const p of this.players.values()) this.save(p); return this.store.flush(); }
 
@@ -107,12 +113,19 @@ class Game {
         }
         break;
       case 'vow':
-        if (VOWS[m.id]) { p.vow = m.id; this.toast(p, 'Juramento: ' + VOWS[m.id].nome); }
+        if (has(VOWS, m.id)) { p.vow = m.id; this.toast(p, 'Juramento: ' + VOWS[m.id].nome); }
         break;
       case 'spin': this.spin(p); break;
       case 'buySpin': this.buySpin(p); break;
       case 'buyGear': this.buyGear(p, m.slot); break;
       case 'home': this.home(p); break;
+      case 'use': this.useItem(p, m.id); break;
+      case 'buyItem': this.buyItem(p, m.id); break;
+      case 'rank': this.rank(p); break;
+      case 'hname':
+        p.hname = String(m.text || '').replace(/[^\p{L}\p{N} _'-]/gu, '').trim().slice(0, 20);
+        this.toast(p, p.hname ? 'Seu Hatsu agora se chama ' + p.hname : 'Nome do Hatsu removido');
+        this.save(p); break;
       case 'chat': this.chat(p, m.text); break;
     }
   }
@@ -155,7 +168,7 @@ class Game {
   }
 
   buyGear(p, slot) {
-    if (!GEAR[slot]) return;
+    if (!has(GEAR, slot)) return;
     if (p.dead || !zoneAt(p.x, p.y).seguro) return this.toast(p, 'A loja fica na vila (centro do mapa).');
     const price = gearPrice(slot, p[slot]);
     if (!price) return this.toast(p, GEAR[slot].nome + ' já está no nível máximo.');
@@ -172,6 +185,41 @@ class Game {
     p.homeCd = now + 30000;
     p.x = WORLD.cx + rnd(-80, 80); p.y = WORLD.cy + rnd(-80, 80);
     this.fx(p.x, p.y, 70, '#ffffff');
+  }
+  addItem(p, id, n) {
+    p.inv[id] = Math.min(ITEM_MAX, (p.inv[id] || 0) + (n || 1));
+  }
+  buyItem(p, id) {
+    if (!has(ITEMS, id)) return;
+    const it = ITEMS[id];
+    if (p.dead || !zoneAt(p.x, p.y).seguro) return this.toast(p, 'A loja fica na vila (centro do mapa).');
+    if (p.inv[id] >= ITEM_MAX) return this.toast(p, 'Mochila cheia.');
+    if (p.jenny < it.preco) return this.toast(p, 'Jenny insuficiente (' + it.preco + ').');
+    p.jenny -= it.preco; this.addItem(p, id);
+    this.save(p);
+  }
+  useItem(p, id) {
+    const now = Date.now();
+    if (!has(ITEMS, id) || p.dead || now - p.lastItem < 800) return;
+    if (!p.inv[id]) return this.toast(p, 'Você não tem ' + ITEMS[id].nome + '.');
+    if (id === 'pocao') {
+      const mh = this.maxHp(p);
+      if (p.hp >= mh) return this.toast(p, 'Sua vida já está cheia.');
+      p.hp = Math.min(mh, p.hp + mh * 0.4); this.dmgText(p.x, p.y - 40, mh * 0.4, '#7ee081');
+    } else if (id === 'cristal') {
+      const ma = this.maxAura(p);
+      if (p.aura >= ma) return this.toast(p, 'Sua aura já está cheia.');
+      p.aura = Math.min(ma, p.aura + ma * 0.6); this.fx(p.x, p.y, 40, '#4aa8ff');
+    }
+    p.inv[id]--; p.lastItem = now;
+  }
+  rank(p) {
+    const now = Date.now();
+    if (now - p.lastRank < 1500) return;
+    p.lastRank = now;
+    const list = [...this.players.values()].sort((a, b) => b.lvl - a.lvl || b.xp - a.xp).slice(0, 10)
+      .map((q) => ({ n: q.name, l: q.lvl, c: q.cat, h: q.hunter ? 1 : 0 }));
+    this.send(p, { t: 'rank', list });
   }
   newQuest(p) {
     const pool = Object.entries(MOBS).filter(([, d]) => p.lvl >= d.minLvl);
@@ -214,6 +262,7 @@ class Game {
     p.hatsuCd = t + HATSU_CD * (vow.cdMult || 1);
     const pw = vow.mult, base = this.dmgOf(p, now), dir = p.aim || { x: p.fx, y: p.fy };
     const cor = CATS[p.cat].cor;
+    if (p.hname) this.events.push({ k: 'd', x: Math.round(p.x), y: Math.round(p.y - 50), v: p.hname, c: cor });
     const around = (rad, fn) => { for (const m of this.mobs) if (!m.dead && Math.hypot(m.x - p.x, m.y - p.y) < rad + MOBS[m.type].r) fn(m); };
     switch (p.cat) {
       case 'intensificacao': this.fx(p.x, p.y, 120, cor); around(120, (m) => this.hurtMob(m, base * 3 * pw, p)); break;
@@ -238,24 +287,55 @@ class Game {
   hurtMob(m, dmg, p) {
     if (m.dead) return;
     m.hp -= dmg; m.target = p.id;
+    (m.hit || (m.hit = new Set())).add(p.id);
     this.dmgText(m.x, m.y - 20, dmg, '#ffe08a');
     if (m.hp > 0) return;
     const def = MOBS[m.type];
     m.dead = true; m.respawnAt = Date.now() + (def.respawn || 10000); m.target = null;
-    const jenny = rint(def.jenny[0], def.jenny[1]);
+    // chefe: todo mundo que causou dano recebe a recompensa
+    const winners = def.boss ? [...m.hit].map((id) => this.players.get(id)).filter(Boolean) : [p];
+    m.hit = null;
+    for (const w of winners) this.reward(m, def, w);
+    if (def.boss) {
+      const extra = winners.length > 1 ? ' com ' + (winners.length - 1) + ' aliado(s)' : '';
+      const msg = { t: 'chat', n: 'Sistema', text: p.name + ' derrotou ' + def.nome + extra + '!' };
+      for (const o of this.players.values()) this.send(o, msg);
+    }
+  }
+  reward(m, def, p) {
+    const bonus = p.hunter ? 1.1 : 1;
+    const jenny = Math.round(rint(def.jenny[0], def.jenny[1]) * bonus);
     p.jenny += jenny;
-    this.addXp(p, def.xp);
+    this.addXp(p, Math.round(def.xp * bonus));
     this.dmgText(m.x, m.y - 40, jenny, '#f2c14e');
+    // missão de caça
     const q = p.quest;
     if (q && q.ty === m.type && ++q.have >= q.need) {
       p.jenny += q.rj; this.addXp(p, q.rx);
       this.toast(p, 'Caçada concluída! +' + q.rj + ' J');
       p.quest = this.newQuest(p); this.save(p);
     }
-    if (def.boss) {
-      const msg = { t: 'chat', n: 'Sistema', text: p.name + ' derrotou ' + def.nome + '!' };
-      for (const o of this.players.values()) this.send(o, msg);
+    // Exame Hunter (só conta se estiver no nível mínimo da prova)
+    const ex = p.exam, ph = ex && EXAM[ex.n - 1];
+    if (ph && ph.ty === m.type && p.lvl >= ph.lvl && ++ex.have >= ph.need) {
+      p.jenny += ph.jenny; this.addXp(p, ph.xp);
+      if (ex.n >= EXAM.length) {
+        p.exam = null; p.hunter = true; p.spins += 2;
+        this.toast(p, 'Você é um Hunter! Licença conquistada, +2 spins.');
+        const msg = { t: 'chat', n: 'Sistema', text: p.name + ' conquistou a Licença Hunter!' };
+        for (const o of this.players.values()) this.send(o, msg);
+      } else {
+        p.exam = { n: ex.n + 1, have: 0 };
+        this.toast(p, ph.nome + ' concluída! +' + ph.jenny + ' J');
+      }
+      this.save(p);
     }
+    // drops
+    for (const [id, it] of Object.entries(ITEMS)) {
+      const n = def.boss ? 3 : Math.random() < it.drop ? 1 : 0;
+      if (n) { this.addItem(p, id, n); this.toast(p, '+' + n + ' ' + it.nome); }
+    }
+    if (def.boss && Math.random() < 0.3) { p.spins++; this.toast(p, 'O chefe deixou cair um spin!'); }
   }
   addXp(p, v) {
     if (p.lvl >= LEVEL_CAP) return;
@@ -365,7 +445,7 @@ class Game {
     for (const q of this.players.values()) {
       if (q === p || !near(q)) continue;
       if (q.nen === 'zetsu' && Math.hypot(q.x - p.x, q.y - p.y) > 150) continue;
-      pl.push({ id: q.id, n: q.name, x: r1(q.x), y: r1(q.y), c: q.cat, hp: Math.round(q.hp), mh: this.maxHp(q), l: q.lvl, nen: q.nen, d: q.dead ? 1 : 0, sh: q.shield > 0 ? 1 : 0 });
+      pl.push({ h: q.hunter ? 1 : 0, id: q.id, n: q.name, x: r1(q.x), y: r1(q.y), c: q.cat, hp: Math.round(q.hp), mh: this.maxHp(q), l: q.lvl, nen: q.nen, d: q.dead ? 1 : 0, sh: q.shield > 0 ? 1 : 0 });
     }
     const mb = [];
     for (const m of this.mobs) if (!m.dead && near(m)) mb.push({ id: m.id, ty: m.type, x: r1(m.x), y: r1(m.y), hp: Math.round(m.hp), mh: m.maxHp, st: m.stun > 0 ? 1 : 0 });
@@ -380,6 +460,8 @@ class Game {
         lvl: p.lvl, xp: Math.round(p.xp), xn: this.xpNeed(p.lvl), cat: p.cat, jenny: p.jenny, spins: p.spins, price: this.spinPrice(p),
         vow: p.vow, nen: p.nen, dead: p.dead ? 1 : 0, sh: Math.round(p.shield), hcd: Math.max(0, r1(p.hatsuCd - t)), zone: z.nome, safe: z.seguro ? 1 : 0, hist: p.history,
         sp: Math.round(this.speedOf(p, Date.now())), wp: p.wp, ar: p.ar, gp: [gearPrice('wp', p.wp), gearPrice('ar', p.ar)], q: p.quest ? { ty: p.quest.ty, need: p.quest.need, have: p.quest.have, rj: p.quest.rj } : null, hm: Math.max(0, Math.ceil((p.homeCd - Date.now()) / 1000)),
+        inv: p.inv, hn: p.hunter ? 1 : 0, hname: p.hname,
+        ex: p.exam ? { n: p.exam.n, have: p.exam.have, need: EXAM[p.exam.n - 1].need, nome: EXAM[p.exam.n - 1].nome, ty: EXAM[p.exam.n - 1].ty, lvl: EXAM[p.exam.n - 1].lvl, tot: EXAM.length } : null,
       },
       p: pl, m: mb, j: pj, e: ev,
     });

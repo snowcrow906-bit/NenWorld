@@ -59,4 +59,19 @@ const GEAR = {
 };
 const gearPrice = (slot, lvl) => (lvl >= GEAR[slot].max ? 0 : Math.round(GEAR[slot].base * Math.pow(GEAR[slot].mult, lvl)));
 
-module.exports = { WORLD, ZONES, zoneAt, CATS, CAT_IDS, SPIN_ODDS, SPIN_PRICE, VOWS, MOBS, GEAR, gearPrice };
+// Itens de consumo (comprados na vila ou dropados por monstros)
+const ITEMS = {
+  pocao: { nome: 'Poção de Cura', preco: 60, drop: 0.12, desc: 'Recupera 40% da vida.' },
+  cristal: { nome: 'Cristal de Aura', preco: 80, drop: 0.08, desc: 'Recupera 60% da aura.' },
+};
+const ITEM_MAX = 99;
+
+// Exame Hunter: 4 provas em sequência; concluir dá a Licença Hunter (+10% de Jenny e XP, estrela no nome, 2 spins)
+const EXAM = [
+  { nome: 'Prova da Floresta', ty: 'lobo', need: 12, lvl: 3, jenny: 400, xp: 150 },
+  { nome: 'Prova do Pântano', ty: 'urso', need: 8, lvl: 10, jenny: 1500, xp: 600 },
+  { nome: 'Prova das Ruínas', ty: 'golem', need: 6, lvl: 18, jenny: 5000, xp: 2500 },
+  { nome: 'Prova Final: o Guardião', ty: 'guardiao', need: 1, lvl: 25, jenny: 15000, xp: 9000 },
+];
+
+module.exports = { ITEMS, ITEM_MAX, EXAM, WORLD, ZONES, zoneAt, CATS, CAT_IDS, SPIN_ODDS, SPIN_PRICE, VOWS, MOBS, GEAR, gearPrice };

@@ -15,7 +15,10 @@ class Store {
     this.dirtyKeys = new Set();
     const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
     const key = process.env.SUPABASE_KEY || '';
-    this.remote = url && key ? { url, headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' } } : null;
+    // Chaves novas (sb_secret_...) não são JWT: vão só no cabeçalho apikey. Chaves antigas (service_role, começam com eyJ) também usam Authorization.
+    const headers = { apikey: key, 'Content-Type': 'application/json' };
+    if (key.startsWith('eyJ')) headers.Authorization = 'Bearer ' + key;
+    this.remote = url && key ? { url, headers } : null;
     if (!this.remote) {
       try { fs.mkdirSync(DIR, { recursive: true }); } catch (_) {}
       try { this.db = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (_) { this.db = {}; }

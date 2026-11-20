@@ -6,7 +6,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { Game, TICK } = require('./game');
 const { Store } = require('./store');
-const { WORLD, ZONES, CATS, SPIN_ODDS, VOWS, MOBS, GEAR } = require('./data');
+const { WORLD, ZONES, CATS, SPIN_ODDS, VOWS, MOBS, GEAR, ITEMS, EXAM } = require('./data');
 
 const PORT = process.env.PORT || 3000;
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -16,10 +16,22 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS || 100);
 const store = new Store();
 const game = new Game(store);
 
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
 const server = http.createServer((req, res) => {
-  if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
-  const file = path.join(CLIENT_DIR, 'index.html');
-  fs.readFile(file, (err, data) => {
+  const url = String(req.url || '/').split('?')[0];
+  if (url === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
+  if (url.startsWith('/assets/')) { // arquivos de arte/áudio em client/assets (só o nome do arquivo, sem subpastas)
+    let name = '';
+    try { name = path.basename(decodeURIComponent(url)); } catch (_) {}
+    const type = MIME[path.extname(name).toLowerCase()];
+    if (!type || name.startsWith('.')) { res.writeHead(404); return res.end(); }
+    return fs.readFile(path.join(CLIENT_DIR, 'assets', name), (err, data) => {
+      if (err) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=86400' });
+      res.end(data);
+    });
+  }
+  fs.readFile(path.join(CLIENT_DIR, 'index.html'), (err, data) => {
     if (err) { res.writeHead(404); return res.end('Cliente não encontrado'); }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(data);
@@ -52,7 +64,7 @@ wss.on('connection', (ws) => {
     byToken.set(token, p);
     game.send(p, {
       t: 'welcome', id: p.id, world: WORLD, zones: ZONES,
-      cats: CATS, odds: SPIN_ODDS, vows: VOWS, mobs: MOBS, gear: GEAR,
+      cats: CATS, odds: SPIN_ODDS, vows: VOWS, mobs: MOBS, gear: GEAR, items: ITEMS, exam: EXAM,
     });
   }
 

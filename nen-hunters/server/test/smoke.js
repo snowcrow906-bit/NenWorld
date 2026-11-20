@@ -31,6 +31,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!welcome) fail('sem welcome'); ok('join e welcome');
   if (!last || !last.me) fail('sem snapshot'); ok('snapshot recebido');
 
+  const http = require('http'), fs = require('fs');
+  const get = (u) => new Promise((r) => http.get({ port: PORT, path: u }, (res) => { res.resume(); r(res.statusCode); }));
+  const adir = path.join(__dirname, '..', '..', 'client', 'assets'); fs.mkdirSync(adir, { recursive: true });
+  fs.writeFileSync(path.join(adir, '__teste.png'), 'x');
+  const cods = [await get('/health'), await get('/assets/__teste.png'), await get('/assets/../../server/package.json'), await get('/assets/%2e%2e%2fpackage.json'), await get('/assets/nao-existe.png'), await get('/assets/__teste.txt')];
+  fs.unlinkSync(path.join(adir, '__teste.png')); try { fs.rmdirSync(adir); } catch (_) {}
+  if (cods.join() !== '200,200,404,404,404,404') fail('rotas estáticas: ' + cods.join()); ok('arquivos em /assets são servidos e tentativas de sair da pasta dão 404');
+
   const x0 = last.me.x;
   ws.send(JSON.stringify({ t: 'input', dx: 1, dy: 0 }));
   await wait(600);

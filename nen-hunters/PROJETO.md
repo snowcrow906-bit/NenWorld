@@ -25,17 +25,18 @@ Para hospedar o cliente separado (Vercel/Netlify), abra com `?server=wss://SEU-S
 
 ## Estrutura
 ```
-client/index.html     jogo completo (canvas, HUD, joystick, painel de spin/juramento)
+client/index.html     jogo completo (canvas, HUD, joystick, painéis, arte em código)
+client/assets/        imagens opcionais (lobo.png, urso.png, golem.png, guardiao.png)
 server/src/index.js   HTTP + WebSocket, limite de mensagens, login por token
 server/src/game.js    mundo autoritativo: movimento, combate, Nen, spin, snapshots 20x/s
 server/src/data.js    TODO o balanceamento (categorias, chances, preços, mobs, zonas)
 server/src/store.js   persistência: Supabase (se configurado) ou arquivo JSON
-server/test/           smoke.js (rede), store.test.js (Supabase simulado), game.test.js (regras)
+server/test/           smoke.js (rede), store.test.js (Supabase simulado), game.test.js e v3.test.js (regras)
 ```
 
 ## Protocolo (JSON via WebSocket)
-Cliente → servidor: `join{name,token}`, `input{dx,dy}`, `attack{ax,ay}`, `hatsu{ax,ay}`, `nen{mode:ten|zetsu|ren}`, `vow{id}`, `spin`, `buySpin`, `buyGear{slot:wp|ar}`, `home`, `chat{text}`.
-Servidor → cliente: `welcome` (mundo, categorias, chances, juramentos, mobs), `s` (snapshot: `me`, `p` jogadores, `m` monstros, `j` projéteis, `e` eventos), `toast`, `chat`, `spinResult{cat}`.
+Cliente → servidor: `join{name,token}`, `input{dx,dy}`, `attack{ax,ay}`, `hatsu{ax,ay}`, `nen{mode:ten|zetsu|ren}`, `vow{id}`, `spin`, `buySpin`, `buyGear{slot:wp|ar}`, `buyItem{id}`, `use{id}`, `home`, `rank`, `hname{text}`, `chat{text}`.
+Servidor → cliente: `welcome` (mundo, categorias, chances, juramentos, mobs, equipamentos, itens, provas do exame), `s` (snapshot: `me`, `p` jogadores, `m` monstros, `j` projéteis, `e` eventos), `toast`, `chat`, `rank{list}`, `spinResult{cat}`.
 O servidor decide tudo; o cliente só envia intenções.
 
 ## Decisões de design fechadas
@@ -68,6 +69,14 @@ Limites do plano gratuito (conferidos em 2026): 500 MB de banco por projeto e **
 ## Atualizar o jogo
 O Render refaz o deploy sozinho a cada commit no GitHub (Auto-Deploy). Para enviar uma versão nova, arraste a pasta `nen-hunters` do zip para a página **Add file → Upload files** da raiz do repositório e faça o commit. Os arquivos de mesmo caminho são substituídos. Durante o deploy os jogadores são desconectados por alguns instantes.
 
+## Arte (v0.4)
+- **Monstros**: sprites pixel art gerados no ForgeGUI (lobo, urso, golem, Guardião). O cliente recorta o sprite automaticamente (e remove fundo liso, se houver) e, se a imagem não carregar, desenha círculos como antes. Para testar sem arte: abra o jogo com `?art=off`.
+- **Hospedagem das imagens**: por padrão o jogo usa os links públicos do ForgeGUI (ficam no código do jogo, que é público). Para não depender deles, baixe e salve em `client/assets/` como `lobo.png`, `urso.png`, `golem.png`, `guardiao.png`; o servidor entrega a pasta em `/assets/` e o jogo prefere esses arquivos.
+  Links (prefixo `https://azyjlkhpdgafuobyxoax.supabase.co/storage/v1/object/public/asset-images/68b5eea6-2896-4c60-9209-92a0f4b43ca7/mcp/`):
+  lobo `4bc45d29-c08e-42bf-b178-37754e9da866/u1-e1-0.png`, urso `2c858d29-dbee-46a7-8577-05f53a138941/u1-e1-0.png`, golem `19a93869-f4ac-43f4-be1f-5dac312c84fa/u1-e1-0.png`, guardião `54f2f891-1ce6-4612-b2a0-9eae03e2b853/u1-e1-0.png`.
+- **Feito em código** (sem créditos): personagem caçador (aura e cachecol na cor da categoria, olha para onde anda), chão com textura por zona, pinheiros, árvores secas, pilares, vila com fonte e cabanas (cabana "Loja"), ícones de poção e cristal, tela de título animada.
+- **Pendente com créditos do ForgeGUI**: sprite do caçador, ícones de itens, texturas de chão e fundo do título em pixel art. O ForgeGUI cobra 1.600 créditos por imagem pixel; os créditos da conta acabaram e a resposta dela indicou renovação em 13/12/2026. O Higgsfield conectado aqui só consulta modelos e histórico, não gera imagens.
+
 ## Estado
 - [x] Etapa 1 — design base (acima)
 - [x] Etapa 2 — servidor base (sala única, tick 20 Hz, interesse por distância)
@@ -76,17 +85,24 @@ O Render refaz o deploy sozinho a cada commit no GitHub (Auto-Deploy). Para envi
 - [x] Etapa 5 — spin e economia
 - [x] Etapa 6 — save no Supabase (opcional por variáveis de ambiente; fallback em arquivo)
 - [ ] Etapa 6b — login real (hoje: token guardado no navegador; trocar por Supabase Auth)
-- [~] Etapa 7 — conteúdo. Feito (v0.2): loja de armas e armadura (7 níveis, só na vila), missões de caça por nível, chefe Guardião das Ruínas (nível 20+ nas missões, renasce em 90 s), minimapa, botão/tecla V para voltar à vila (recarga 30 s). Falta: Exame Hunter, cidades, itens e inventário, mais chefes.
+- [~] Etapa 7 — conteúdo. Feito: loja de armas e armadura, missões de caça, chefe Guardião, minimapa, botão Vila (v0.2); inventário com poções e cristais, drops, **Exame Hunter** (4 provas + Licença Hunter), ranking online, nome do Hatsu, recompensa coletiva do chefe (v0.3). Falta: cidades, mais chefes, mais itens (equipamentos dropáveis), criador de Hatsu com efeitos escolhidos.
 - [ ] Etapa 8 — social: PvP e Torre Celestial, grupos, ranking, trocas
 - [ ] Etapa 9 — anti-cheat avançado e testes de carga
 - [ ] Etapa 10 — testes com vários jogadores no servidor publicado
 
-Testes: `npm test` roda três suítes (fumaça do servidor, Supabase simulado, regras do jogo). O cliente foi testado em navegador sem erros. **Ainda não testado**: Supabase real, muitos jogadores ao mesmo tempo.
+Testes: `npm test` roda quatro suítes (fumaça do servidor, Supabase simulado, regras do jogo v0.2 e v0.3). O cliente foi testado em navegador sem erros. **Ainda não testado**: Supabase real, muitos jogadores ao mesmo tempo.
 
 ## Regras novas da v0.2
 - **Loja** (vila): Arma +15% de dano por nível; Armadura -6% de dano recebido por nível. Preço do próximo nível: 250 × 2,1^nível (de 250 J até ~10.500 J).
 - **Missões**: matar N monstros do tipo sorteado (só tipos liberados pelo nível); recompensa = N × Jenny médio × 1,5 + XP. Ao concluir, sorteia outra.
-- **Chefe**: Guardião das Ruínas (2200 de vida), anuncia no chat global quando cai.
+- **Chefe**: Guardião das Ruínas (2200 de vida), anuncia no chat global quando cai. **Todo mundo que causou dano** recebe Jenny, XP, progresso de missão/exame e drops. 30% de chance de deixar cair 1 spin.
+
+## Regras novas da v0.3
+- **Itens** (comprados na vila ou dropados): Poção de Cura (60 J, 12% de drop, +40% de vida) e Cristal de Aura (80 J, 8% de drop, +60% de aura). Limite 99 de cada. Atalhos Q e F; botões no celular. Chefe sempre dropa 3 de cada.
+- **Exame Hunter**: Prova 1 (12 lobos, Nv 3), Prova 2 (8 ursos, Nv 10), Prova 3 (6 golens, Nv 18), Prova Final (o Guardião, Nv 25). A prova só conta se o jogador estiver no nível mínimo. Concluir tudo dá a **Licença Hunter**: estrela ★ no nome, +10% de Jenny e XP e +2 spins.
+- **Ranking**: top 10 dos jogadores online por nível (não é um ranking global salvo).
+- **Nome do Hatsu**: texto livre filtrado (letras, números, espaço, `_`, `-`, `'`, até 20), aparece ao usar o Hatsu.
+- **Segurança**: nomes como `__proto__` ou `constructor` em compras, itens e juramentos são ignorados (teste em `v3.test.js`).
 
 ## Ideias já pensadas (não feitas)
 Habilidade Hatsu personalizada (criador com condições), inventário e equipamentos, PvP com zonas seguras, mapa-mini, sons, sprites no lugar dos círculos.

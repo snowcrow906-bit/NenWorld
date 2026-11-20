@@ -1,0 +1,7 @@
+Coloque aqui as imagens do jogo (opcional).
+O jogo procura primeiro por estes arquivos e, se não existirem, usa os links públicos do ForgeGUI:
+
+  lobo.png      urso.png      golem.png      guardiao.png
+
+Os links estão no PROJETO.md. Baixe cada imagem, salve com o nome acima nesta pasta e envie para o GitHub.
+Fundo transparente funciona melhor; se a imagem tiver fundo liso, o jogo tenta remover sozinho.
